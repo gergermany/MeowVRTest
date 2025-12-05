@@ -116,6 +116,10 @@
 </head>
 <body>
 
+    <!-- 加入貓叫聲音效 -->
+    <!-- 使用 crossOrigin="anonymous" 避免跨域問題 -->
+    <audio id="meow-sound" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.m4a" crossOrigin="anonymous"></audio>
+
     <div id="container">
         <div id="loading">
             <div class="spinner"></div>
@@ -127,6 +131,7 @@
             <h1>Neon Cats VR</h1>
             <p><span id="status-dot" class="status-dot"></span><span id="status-text">Waiting for camera...</span></p>
             <p style="margin-top:5px; font-size: 0.8rem;">Show your hand to play with cats!</p>
+            <p style="margin-top:2px; font-size: 0.7rem; color: #aaa;">(Click screen once to enable audio)</p>
         </div>
 
         <!-- 攝像頭畫面 -->
@@ -238,6 +243,23 @@
         const handCursor = new THREE.Mesh(cursorGeo, cursorMat);
         scene.add(handCursor);
         
+        // --- Audio Setup ---
+        const meowAudio = document.getElementById('meow-sound');
+        // 嘗試預先加載
+        meowAudio.load();
+        
+        // 處理 Audio Context 限制：使用者點擊畫面後確保音訊可播放
+        window.addEventListener('click', () => {
+            if (meowAudio.paused) {
+                // 播放一個極短的無聲片段或暫停，以解鎖音頻
+                meowAudio.play().then(() => {
+                    meowAudio.pause();
+                    meowAudio.currentTime = 0;
+                }).catch(e => console.log("Audio waiting for interaction"));
+            }
+        });
+
+
         // --- 2. Interaction Logic ---
         
         let isPinching = false; // 是否正在捏合
@@ -305,6 +327,12 @@
                     
                     if (candidate) {
                         draggedCat = candidate;
+                        
+                        // --- 播放音效 ---
+                        // 重置時間並播放
+                        meowAudio.currentTime = 0;
+                        meowAudio.play().catch(e => console.log("Audio blocked: click page first"));
+
                         // 視覺反饋
                         candidate.children.forEach(c => c.material.emissive.setHex(0x444444));
                     }
@@ -336,26 +364,6 @@
                 // Apply velocity
                 cat.position.add(cat.userData.velocity);
                 
-                // Add rotation based on velocity
-                cat.rotation.x += cat.userData.rotationSpeed.x + (cat.userData.velocity.y * 0.05);
-                cat.rotation.y += cat.userData.rotationSpeed.y + (cat.userData.velocity.x * 0.05);
-
-                // Damping (摩擦力)
-                cat.userData.velocity.multiplyScalar(0.92);
-
-                // Spring force back (如果沒被抓，慢慢飄回原位)
-                if (cat !== draggedCat) {
-                    const returnForce = cat.userData.originalPos.clone().sub(cat.position).multiplyScalar(0.03);
-                    cat.userData.velocity.add(returnForce);
-                }
-            });
-        }
-
-        function updatePhysics() {
-            cats.forEach(cat => {
-                // Apply velocity
-                cat.position.add(cat.userData.velocity);
-                
                 // Add rotation based on velocity (tumble effect)
                 cat.rotation.x += cat.userData.rotationSpeed.x + (cat.userData.velocity.y * 0.05);
                 cat.rotation.y += cat.userData.rotationSpeed.y + (cat.userData.velocity.x * 0.05);
@@ -364,8 +372,11 @@
                 cat.userData.velocity.multiplyScalar(0.92);
 
                 // Spring force back
-                const returnForce = cat.userData.originalPos.clone().sub(cat.position).multiplyScalar(0.03);
-                cat.userData.velocity.add(returnForce);
+                // 如果沒被抓，且距離原位有點遠，才慢慢飄回 (這裡可以選擇不飄回，或者只飄回一點點)
+                if (cat !== draggedCat) {
+                    const returnForce = cat.userData.originalPos.clone().sub(cat.position).multiplyScalar(0.03);
+                    cat.userData.velocity.add(returnForce);
+                }
             });
         }
 
